@@ -31,6 +31,9 @@ const selectPage = document.querySelector('#page-select');
 const selectLegoSetIds = document.querySelector('#lego-set-id-select');
 const sectionDeals= document.querySelector('#deals');
 const spanNbDeals = document.querySelector('#nbDeals');
+const bestDiscountButton = document.querySelector('#bestDiscountButton');
+const mostCommentedButton = document.querySelector('#mostCommentedButton');
+const hotDealsButton = document.querySelector('#hotDealsButton');
 
 /**
  * Set global value
@@ -145,6 +148,7 @@ const render = (deals, pagination) => {
  * Select the number of deals to display
  */
 selectShow.addEventListener('change', async (event) => {
+  // Fetch the deals for the selected page
   const deals = await fetchDeals(currentPagination.currentPage, parseInt(event.target.value));
 
   setCurrentDeals(deals);
@@ -157,3 +161,112 @@ document.addEventListener('DOMContentLoaded', async () => {
   setCurrentDeals(deals);
   render(currentDeals, currentPagination);
 });
+
+selectPage.addEventListener('change', async (event) => {
+  console.log('select page');
+  // Feature 1
+  // Load the selected page
+  const selectedPage = parseInt(event.target.value);
+
+  // Fetch the deals for the selected page
+  const deals = await fetchDeals(selectedPage, currentPagination.pageSize);
+
+  setCurrentDeals(deals);
+  render(currentDeals, currentPagination);
+});
+
+const discountSlider = document.querySelector('#discountSlider');
+const discountValue = document.querySelector('#discountValue');
+let discount = 50;
+
+// Écouter les changements de valeur du slider
+discountSlider.addEventListener('input', async (event) => {
+  discount = parseInt(event.target.value); // Récupérer la valeur du slider
+  discountValue.textContent = discount; // Mettre à jour la valeur affichée
+});
+
+bestDiscountButton.addEventListener('click', async (event) => {
+  console.log('Best Discount');
+
+  // Récupérer tous les deals avec la fonction modifiée
+  const allDeals = await fetchAllDealsUsingFetchDeals();
+
+  // Filtrer les deals avec une réduction >= 50 %
+  const filteredDeals = filterByBestDiscount(allDeals, discount);
+
+  // Afficher les résultats filtrés (toutes pages combinées)
+  setCurrentDeals({ result: filteredDeals, meta: { count: filteredDeals.length } });
+  render(filteredDeals, { count: filteredDeals.length, currentPage: 1, pageCount: 1 });
+});
+
+const commentSlider = document.querySelector('#commentSlider');
+const commentValue = document.querySelector('#commentValue');
+let comments = 5;
+
+// Écouter les changements de valeur du slider
+commentSlider.addEventListener('input', async (event) => {
+  comments = parseInt(event.target.value); // Récupérer la valeur du slider
+  commentValue.textContent = comments; // Mettre à jour la valeur affichée
+});
+
+mostCommentedButton.addEventListener('click', async (event) => {
+  console.log('Most Commented');
+
+  // Récupérer toutes les offres
+  const allDeals = await fetchAllDealsUsingFetchDeals();
+
+  // Filtrer les offres avec plus de 15 commentaires
+  const filteredDeals = filterByMostCommented(allDeals);
+
+  // Mettre à jour les données affichées
+  setCurrentDeals({ result: filteredDeals, meta: { count: filteredDeals.length } });
+  render(filteredDeals, { count: filteredDeals.length, currentPage: 1, pageCount: 1 });
+});
+
+hotDealsButton.addEventListener('click', async (event) => {
+  console.log('Hot Deals');
+});
+
+// Feature 2 - Filter by best discount
+function filterByBestDiscount(deals, discount) {
+  // Problem with "deals" instead of "currentDeals", deals is not an array so we can't do ".filter".
+  if (!Array.isArray(deals)) {
+    console.error('Expected an array, but got:', deals);
+    return [];
+  }
+  return deals.filter(deal => deal.discount >= discount);
+}
+
+const fetchAllDealsUsingFetchDeals = async () => {
+  let allDeals = [];
+  let page = 1;
+  let size = 24; // Nombre maximal d'éléments par page
+  let hasMorePages = true;
+
+  while (hasMorePages) {
+    const { result, meta } = await fetchDeals(page, size);
+
+    // Ajouter les deals de la page actuelle à la liste complète
+    allDeals = allDeals.concat(result);
+
+    // Vérifier si on a atteint la dernière page
+    hasMorePages = meta.currentPage < meta.pageCount;
+    page++;
+  }
+
+  return allDeals;
+};
+
+/**
+ * Filter deals by most commented
+ * @param {Array} deals - List of deals to filter
+ * @return {Array} - Deals with more than 15 comments
+ */
+function filterByMostCommented(deals) {
+  if (!Array.isArray(deals)) {
+    console.error('Expected an array, but got:', deals);
+    return [];
+  }
+
+  return deals.filter(deal => deal.comments >= comments);
+}

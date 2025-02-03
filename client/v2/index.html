@@ -19,11 +19,24 @@
         <label for="page-select">Go to page:</label>
         <select name="page" id="page-select"> </select>
       </div>
+
       <div id="filters">
-        <span>By best discount</span>
-        <span>By most commented</span>
-        <span>By hot deals</span>
+        <button id="bestDiscountButton">By best discount</button>
+        <button id="mostCommentedButton">By most commented</button>
+        <button id="hotDealsButton">By hot deals</button>
       </div>
+
+      <div>
+        <label for="discountSlider">Filter by discount (minimum %): </label>
+        <input type="range" id="discountSlider" min="0" max="100" step="1" value="50">
+        <span id="discountValue">50</span>%
+      </div>
+      <div>
+        <label for="commentSlider">Filter by comments (minimum): </label>
+        <input type="range" id="commentSlider" min="0" max="15" step="1" value="5">
+        <span id="commentValue">5</span>
+      </div>
+      
       <div id="sort">
         <label for="sort-select">Sort:</label>
         <select name="sort" id="sort-select">
