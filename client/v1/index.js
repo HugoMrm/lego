@@ -602,7 +602,11 @@ if (specificItem) {
   console.log('Specific item with UUID:', targetUUID);
   console.log(specificItem);
 } else {
+<<<<<<< HEAD
   console.log('No item found with UUID: ${targetUUID}');
+=======
+  console.log('No item found with UUID: ', targetUUID);
+>>>>>>> 38921a1c001b0d59eeb7884b92c48f7773f170d1
 }
 // 🎯 TODO 14: Delete a specific item
 // 1. Delete the item with the uuid f2c5377c-84f9-571d-8712-98902dcbb913
