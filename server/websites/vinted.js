@@ -1,6 +1,7 @@
 const axios = require("axios");
 const puppeteer = require("puppeteer");
 const fs = require("fs");
+const path = require('path');
 
 async function getVintedAccessToken() {
   console.log("📡 Récupération des cookies via Puppeteer...");
@@ -47,8 +48,12 @@ async function scrapeVinted(searchText) {
     console.log(filteredItems);
 
     // Enregistrement des résultats dans un fichier JSON
-    fs.writeFileSync("deals.json", JSON.stringify(filteredItems, null, 2));
-    console.log("💾 Données enregistrées dans deals.json");
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+    const filename = `vinted_deals_${timestamp}.json`;
+    const dataDir = path.join(__dirname, '..', 'data'); // Ensure consistent directory structure
+    const filePath = path.join(dataDir, filename);
+    fs.writeFileSync(filePath, JSON.stringify(filteredItems, null, 2));
+    console.log(`💾 Données enregistrées dans ${filePath}`);
   } catch (error) {
     console.error("❌ Erreur :", error.message);
   }

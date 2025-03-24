@@ -1,57 +1,57 @@
-const axios = require('axios');
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const { MongoClient } = require('mongodb');
-require('dotenv').config();
-const solver = require('2captcha').Solver;
+const axios = require("axios");
+const puppeteer = require("puppeteer");
+const fs = require("fs");
+const path = require('path');
 
-const MONGODB_URI = process.env.MONGODB_URI;
-const MONGODB_DB_NAME = 'lego';
-const COLLECTION_NAME = 'deals';
+const { MongoClient } = require("mongodb");
+
+const MONGODB_URI = "mongodb+srv://hugomermet53:%24S%40snXdDp6Don9fJ@cluster0.lbbkr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const MONGODB_DB_NAME = "vinted";
+
+async function connectToMongoDB() {
+  const client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  console.log("✅ Connecté à MongoDB Atlas !");
+  return client.db(MONGODB_DB_NAME); // Corrige également le nom de la DB
+}
+
+async function listDatabases() {
+  const client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  const databases = await client.db().admin().listDatabases();
+  console.log("📂 Bases de données existantes :", databases.databases); // Affiche les différentes bases de données existantes
+  await client.close();
+}
+
+listDatabases();
+
+async function checkCollections() {
+  const db = await connectToMongoDB();
+  const collections = await db.listCollections().toArray();
+  console.log("📂 Collections existantes dans 'lego' :", collections.map(c => c.name)); // Si l'onglet deals est présent le base de données contient bien des informations
+}
+
+checkCollections();
 
 async function getVintedAccessToken() {
-  console.log('📡 Récupération des cookies via Puppeteer...');
-  const browser = await puppeteer.launch({ headless: false });
+  console.log("📡 Récupération des cookies via Puppeteer...");
+  const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
 
-  await page.goto('https://www.vinted.fr/', { waitUntil: 'domcontentloaded' });
-
-  // Vérifie si le CAPTCHA est visible
-  const captchaFrame = await page.$('iframe[src*="captcha"]');
-  if (captchaFrame) {
-    console.log('⚠️ CAPTCHA détecté. Résolution en cours...');
-
-    // Récupère l'image CAPTCHA
-    const captchaImageSrc = await captchaFrame.evaluate(frame => frame.src);
-    const captchaImageBuffer = await page.goto(captchaImageSrc).then(res => res.buffer());
-
-    // Utilise le service 2Captcha pour résoudre le CAPTCHA
-    const solverInstance = new solver(process.env.CAPTCHA_API_KEY);
-    const result = await solverInstance.solveImageCaptcha(captchaImageBuffer);
-
-    if (result.error) {
-      console.log('❌ Impossible de résoudre le CAPTCHA');
-      await browser.close();
-      return;
-    }
-
-    console.log('✅ CAPTCHA résolu !');
-    await page.type('input[name="captcha_answer"]', result.text);
-    await page.click('button[type="submit"]'); // Soumettre la réponse
-    await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-  }
-
+  await page.goto("https://www.vinted.fr/", { waitUntil: "networkidle2" });
   const cookies = await page.cookies();
   await browser.close();
 
-  const accessTokenCookie = cookies.find(cookie => cookie.name === 'access_token_web');
+  const accessTokenCookie = cookies.find(cookie => cookie.name === "access_token_web");
   if (!accessTokenCookie) {
-    throw new Error('❌ Impossible de récupérer le cookie access_token_web.');
+    throw new Error("❌ Impossible de récupérer le cookie access_token_web.");
   }
 
-  console.log('✅ Cookie récupéré avec succès !');
+  console.log("✅ Cookie récupéré avec succès !");
   return accessTokenCookie.value;
 }
+
+const search_text = "42151";
 
 async function scrapeVinted(searchText) {
   try {
@@ -59,7 +59,7 @@ async function scrapeVinted(searchText) {
     const VINTED_API_URL = `https://www.vinted.fr/api/v2/catalog/items?page=1&per_page=96&search_text=${encodeURIComponent(searchText)}`;
 
     const HEADERS = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       Cookie: `access_token_web=${accessToken}`,
     };
 
@@ -67,45 +67,36 @@ async function scrapeVinted(searchText) {
     const response = await axios.get(VINTED_API_URL, { headers: HEADERS });
     const items = response.data.items;
 
-    const filteredItems = items.map(item => ({
+    const deals = items.map(item => ({
       id: item.id,
       title: item.title,
-      price: item.price_numeric,
-      url: `https://www.vinted.fr/items/${item.id}`,
-      date_scraped: new Date(),
+      price: item.price.amount,
+      price_with_fees: item.total_item_price.amount,
+      url: item.url,
+      photo_url: item.photo.url,
+      user_id: item.user.id,
+      user_login: item.user.login,
+      user_pp: item.user.photo.url,
+      user_url: item.user.profile_url,
+      date: new Date(),
+      scrape_date: new Date(),
+      favorite_count: item.favourite_count,
+      vue_count: item.vue_count,
+      isPromoted: item.promoted
     }));
 
-    console.log(`✅ ${filteredItems.length} articles récupérés pour "${searchText}" !`);
-    console.log(filteredItems);
+    console.log(`✅ ${deals.length} articles récupérés pour "${searchText}" !`);
 
-    // Enregistrement dans MongoDB
-    await saveToDatabase(filteredItems);
+    // Connexion à MongoDB et insertion
+    const db = await connectToMongoDB();
+    const collection = db.collection("deals");
 
-    // Enregistrement des résultats dans un fichier JSON
-    fs.writeFileSync('deals.json', JSON.stringify(filteredItems, null, 2));
-    console.log('💾 Données enregistrées dans deals.json');
-  } catch (error) {
-    console.error('❌ Erreur :', error.message);
-  }
-}
-
-async function saveToDatabase(deals) {
-  const client = new MongoClient(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-
-  try {
-    await client.connect();
-    const db = client.db(MONGODB_DB_NAME);
-    const collection = db.collection(COLLECTION_NAME);
-
-    console.log('💾 Enregistrement dans MongoDB...');
     const result = await collection.insertMany(deals);
-    console.log(`✅ ${result.insertedCount} offres insérées !`);
+    console.log(`💾 ${result.insertedCount} deals insérés dans la base de données !`);
   } catch (error) {
-    console.error('❌ Erreur MongoDB :', error.message);
-  } finally {
-    await client.close();
+    console.error("❌ Erreur :", error.message);
   }
 }
 
 // 🔥 Lancer la recherche sur Vinted
-scrapeVinted('42151');
+scrapeVinted(search_text);
