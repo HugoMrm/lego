@@ -1,164 +1,101 @@
-const axios = require("axios");
-const puppeteer = require("puppeteer");
-const fs = require("fs");
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const { MongoClient } = require('mongodb');
 const path = require('path');
 
-const { MongoClient } = require("mongodb");
-
 const MONGODB_URI = "mongodb+srv://hugomermet53:%24S%40snXdDp6Don9fJ@cluster0.lbbkr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-const MONGODB_DB_NAME = "vinted";
+const MONGODB_DB_NAME = "dealabs";
 
+// Connexion à MongoDB
 async function connectToMongoDB() {
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  console.log("✅ Connecté à MongoDB Atlas !");
-  return client.db(MONGODB_DB_NAME); // Corrige également le nom de la DB
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    console.log("✅ Connecté à MongoDB Atlas !");
+    return client.db(MONGODB_DB_NAME);
 }
 
-async function listDatabases() {
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  const databases = await client.db().admin().listDatabases();
-  console.log("📂 Bases de données existantes :", databases.databases); // Affiche les différentes bases de données existantes
-  await client.close();
-}
-
-listDatabases();
-
-async function checkCollections() {
-  const db = await connectToMongoDB();
-  const collections = await db.listCollections().toArray();
-  console.log("📂 Collections existantes dans 'lego' :", collections.map(c => c.name)); // Si l'onglet deals est présent le base de données contient bien des informations
-}
-
-checkCollections();
-
-async function getVintedAccessToken() {
-  console.log("📡 Récupération des cookies via Puppeteer...");
-  const browser = await puppeteer.launch({ headless: true });
-  const page = await browser.newPage();
-
-  await page.goto("https://www.vinted.fr/", { waitUntil: "networkidle2" });
-  const cookies = await page.cookies();
-  await browser.close();
-
-  const accessTokenCookie = cookies.find(cookie => cookie.name === "access_token_web");
-  if (!accessTokenCookie) {
-    throw new Error("❌ Impossible de récupérer le cookie access_token_web.");
-  }
-
-  console.log("✅ Cookie récupéré avec succès !");
-  return accessTokenCookie.value;
-}
-
-// Fonction pour convertir le nombre de vues (ex: "1.2K" → 1200)
-function parseViewCount(viewCount) {
-  if (viewCount === "N/A" || !viewCount) return 0;
-
-  const cleaned = viewCount.replace(/[^0-9.,kKmM]/g, '').replace(',', '.');
-  if (cleaned.toLowerCase().includes('k')) {
-    return parseFloat(cleaned) * 1000;
-  } else if (cleaned.toLowerCase().includes('m')) {
-    return parseFloat(cleaned) * 1000000;
-  }
-  return parseFloat(cleaned) || 0;
-}
-
-async function scrapeItemDetails(url) {
-    console.log(`🔍 Scraping détails pour: ${url}`);
+async function scrapeDealabs(searchText = 'lego') {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
 
-    try {
-        await page.goto(url, { waitUntil: "networkidle2" });
+    const url = `https://www.dealabs.com/search?q=${encodeURIComponent(searchText)}&?hide_expired=true`;
+    console.log(`🔍 Chargement de ${url}...`);
 
-        // Extraction du nombre de vues
-        const viewCountElement = await page.$('[itemprop="view_count"]');
-        let viewCount = viewCountElement
-            ? await page.evaluate(el => el.innerText.trim(), viewCountElement)
-            : "0";
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.goto(url, { waitUntil: 'networkidle2' });
 
-        // Conversion en nombre
-        viewCount = parseViewCount(viewCount);
+    const deals = await page.evaluate(() => {
+        const dealElements = document.querySelectorAll('article.thread');
+        const extractedDeals = [];
 
-        // Extraction de la date d'ajout
-        const uploadDateElement = await page.$('[itemprop="upload_date"]');
-        const uploadDate = uploadDateElement
-            ? await page.evaluate(el => el.innerText.trim(), uploadDateElement)
-            : "N/A";
+        dealElements.forEach(deal => {
+            const id = deal.getAttribute('id') ? deal.getAttribute('id').replace('thread_', '') : null;
+            const title = deal.querySelector('.cept-tt') ? deal.querySelector('.cept-tt').innerText.trim() : "No title";
 
-        console.log(`✅ Scrapé: Vues: ${viewCount} | Ajouté: ${uploadDate}`);
-        
-        return { viewCount, uploadDate };
-    } catch (error) {
-        console.error(`❌ Erreur lors du scraping de ${url}:`, error.message);
-        return { viewCount: 0, uploadDate: "Erreur" };
-    } finally {
-        await browser.close();
-    }
-}
+            // Extraction du modèle LEGO (5 chiffres)
+            const idLegoMatch = title.match(/\b\d{5}\b/);
+            const id_lego = idLegoMatch ? idLegoMatch[0] : null;
 
-const search_text = "42151";
+            const priceElement = deal.querySelector('.thread-price');
+            const price = priceElement ? parseFloat(priceElement.innerText.replace(/[^0-9.,]/g, '').replace(',', '.')) : 0;
 
-async function scrapeVinted(searchText) {
-  try {
-    const accessToken = await getVintedAccessToken();
-    const VINTED_API_URL = `https://www.vinted.fr/api/v2/catalog/items?page=1&per_page=96&search_text=${encodeURIComponent(searchText)}`;
+            const priceBeforeElement = deal.querySelector('.text--lineThrough');
+            const priceBefore = priceBeforeElement ? parseFloat(priceBeforeElement.innerText.replace(/[^0-9.,]/g, '').replace(',', '.')) : null;
 
-    const HEADERS = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Cookie: `access_token_web=${accessToken}`,
-    };
+            const discountElement = deal.querySelector('.textBadge--green');
+            const discount = discountElement ? discountElement.innerText.replace('%', '').trim() : null;
 
-    console.log(`🔍 Recherche des articles pour "${searchText}"...`);
-    const response = await axios.get(VINTED_API_URL, { headers: HEADERS });
-    const items = response.data.items;
+            const linkElement = deal.querySelector('a.cept-tt');
+            const link = linkElement ? linkElement.href : null;
 
-    const deals = [];
+            const imageElement = deal.querySelector('img');
+            let imageUrl = imageElement ? imageElement.src || imageElement.dataset.src : "No image";
 
-    for (const item of items) {
-      if (!item || !item.url || !item.photo || !item.user) {
-          console.warn("⚠️ Item invalide détecté, il sera ignoré :", item);
-          continue;
-      }
+            // Amélioration de la qualité de l'image (202x202 → 1024x1024)
+            if (imageUrl.includes("202x202")) {
+                imageUrl = imageUrl.replace("202x202", "1024x1024");
+            }
 
-      const { viewCount, uploadDate } = await scrapeItemDetails(item.url);
+            const hotnessElement = deal.querySelector('.cept-vote-temp');
+            const hotness = hotnessElement ? parseInt(hotnessElement.innerText.replace(/[^0-9+-]/g, '')) : 0;
 
-      deals.push({
-          id: item.id,
-          title: item.title || "Titre inconnu",
-          // Conversion en nombres
-          price: parseFloat(item.price?.amount) || 0,
-          price_with_fees: parseFloat(item.total_item_price?.amount) || 0,
-          url: `https://www.vinted.fr/items/${item.id}`,
-          photo_url: item.photo?.url || "Aucune image",
-          user_id: item.user?.id || "Inconnu",
-          user_login: item.user?.login || "Inconnu",
-          user_pp: item.user?.photo?.url || "Aucune image",
-          user_url: item.user?.profile_url || "URL inconnue",
-          upload_date: uploadDate,
-          scrape_date: new Date(),
-          // Conversion en nombres
-          favorite_count: parseInt(item.favourite_count) || 0,
-          view_count: parseInt(viewCount) || 0,
-          isPromoted: item.promoted || false
-      });
+            const descriptionElement = deal.querySelector('.size--all-s');
+            const description = descriptionElement ? descriptionElement.innerText.trim() : "";
 
-      console.log(`✅ Scrapé: ${item.title} | Prix: ${deals[deals.length - 1].price}€ | Vues: ${viewCount}`);
+            extractedDeals.push({
+                id, id_lego, title, price, price_before_discount: priceBefore, discount, url: link,
+                photo_url: imageUrl, hotness, description, scrape_date: new Date().toISOString()
+            });
+        });
+
+        return extractedDeals;
+    });
+
+    await browser.close();
+
+    // Connexion à MongoDB
+    const db = await connectToMongoDB();
+    const collection = db.collection('deals');
+
+    if (deals.length > 0) {
+        try {
+            const result = await collection.insertMany(deals, { ordered: false });
+            console.log(`💾 ${result.insertedCount} deals enregistrés dans MongoDB !`);
+        } catch (error) {
+            console.error("❌ Erreur lors de l'insertion MongoDB:", error.message);
+        }
+    } else {
+        console.log('⚠️ Aucun deal trouvé');
     }
 
-  console.log(`✅ ${deals.length} articles récupérés pour "${searchText}" !`);
-
-  // Connexion à MongoDB et insertion
-  const db = await connectToMongoDB();
-  const collection = db.collection("deals");
-
-  const result = await collection.insertMany(deals);
-  console.log(`💾 ${result.insertedCount} deals insérés dans la base de données !`);
-} catch (error) {
-  console.error("❌ Erreur :", error.message);
-}
+    return deals;
 }
 
-// 🔥 Lancer la recherche sur Vinted
-scrapeVinted(search_text);
+// Lancer le scraping
+scrapeDealabs('lego')
+    .then(deals => console.log(`🎉 Scraping terminé ! ${deals.length} deals trouvés`))
+    .catch(err => console.error('❌ Erreur globale:', err));
+
+module.exports = {
+    scrapeDealabs
+};

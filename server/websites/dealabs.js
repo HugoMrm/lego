@@ -1,152 +1,94 @@
-const axios = require('axios');
-const cheerio = require('cheerio');
+const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
-/**
- * Scrape deals from Dealabs
- * @param {string} url - The URL to scrape
- * @returns {Promise<Array>} - A promise that resolves to an array of deals
- */
-async function scrape(url) {
-  try {
-    // Set headers to mimic a browser request
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
-      'Referer': 'https://www.dealabs.com/'
-    };
+async function scrapeDealabs(searchText = 'lego') {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    
+    const url = `https://www.dealabs.com/search?q=${encodeURIComponent(searchText)}&?hide_expired=true`;
+    console.log(`🔍 Chargement de ${url}...`);
 
-    // Make HTTP request to the Dealabs page
-    const response = await axios.get(url, { headers });
-    const html = response.data;
-    const $ = cheerio.load(html);
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.goto(url, { waitUntil: 'networkidle2' });
 
-    console.log("✅ Page loaded, looking for deals...");
+    const deals = await page.evaluate(() => {
+        const dealElements = document.querySelectorAll('article.thread');
+        const extractedDeals = [];
 
-    // Array to store deals
-    const deals = [];
-    const dealElements = $('article.thread');
+        dealElements.forEach(deal => {
+            const id = deal.getAttribute('id') ? deal.getAttribute('id').replace('thread_', '') : null;
+            const title = deal.querySelector('.cept-tt') ? deal.querySelector('.cept-tt').innerText.trim() : "No title";
 
-    console.log(`🔍 Found ${dealElements.length} potential deals`);
+            // Extraction des 5 chiffres du modèle LEGO
+            const idLegoMatch = title.match(/\b\d{5}\b/);
+            const id_lego = idLegoMatch ? idLegoMatch[0] : null;
 
-    // Extract data from each deal element
-    dealElements.each((index, element) => {
-      try {
-        const titleElement = $(element).find('h2, .threadCardTitle, .cept-tt');
-        const title = titleElement.text().trim() || "No title found";
 
-        // Try different price selectors
-        const priceElement = $(element).find('.thread-price, .threadCardPrice, .cept-tp');
-        const price = priceElement.length ? priceElement.text().trim() : "Price not found";
+            const priceElement = deal.querySelector('.thread-price');
+            const price = priceElement ? parseFloat(priceElement.innerText.replace(/[^0-9.,]/g, '').replace(',', '.')) : 0;
 
-        // Get link and ensure it's a full URL
-        let link = $(element).find('a.cept-tt, a.threadCardTitle, h2 a').attr('href');
-        if (link && !link.startsWith('http')) {
-          link = `https://www.dealabs.com${link}`;
-        }
+            const priceBeforeElement = deal.querySelector('.text--lineThrough');
+            const priceBefore = priceBeforeElement ? parseFloat(priceBeforeElement.innerText.replace(/[^0-9.,]/g, '').replace(',', '.')) : null;
 
-        // Try different image selectors
-        let imageUrl = $(element).find('img.thread-image, img.threadCardImage').attr('src') ||
-                       $(element).find('img.thread-image, img.threadCardImage').attr('data-src') ||
-                       $(element).find('img.cept-thread-img').attr('src');
-        if (!imageUrl) imageUrl = "No image available";
+            const discountElement = deal.querySelector('.textBadge--green');
+            const discount = discountElement ? discountElement.innerText.replace('%', '').trim() : null;
 
-        // Get temperature/hotness
-        const hotnessElement = $(element).find('.cept-vote-temp, .vote-box--count, .threadCardDealVoteCount');
-        const hotness = hotnessElement.length ? hotnessElement.text().trim() : "0";
+            const linkElement = deal.querySelector('a.cept-tt');
+            const link = linkElement ? linkElement.href : null;
 
-        console.log(`➡️ Processing: ${title}`);
+            const imageElement = deal.querySelector('img');
+            let imageUrl = imageElement ? imageElement.src || imageElement.dataset.src : "No image";
 
-        // Add to deals array
-        deals.push({
-          title,
-          price,
-          hotness,
-          link,
-          imageUrl,
-          source: 'dealabs',
-          scrapedAt: new Date().toISOString()
+            // Amélioration de la qualité de l'image en remplaçant "202x202" par "1024x1024"
+            if (imageUrl.includes("202x202")) {
+              imageUrl = imageUrl.replace("202x202", "1024x1024");
+            }
+
+            const hotnessElement = deal.querySelector('.cept-vote-temp');
+            const hotness = hotnessElement ? parseInt(hotnessElement.innerText.replace(/[^0-9+-]/g, '')) : 0;
+
+            const descriptionElement = deal.querySelector('.size--all-s');
+            const description = descriptionElement ? descriptionElement.innerText.trim() : "";
+
+            extractedDeals.push({
+                id, id_lego, title, price, price_before_discount: priceBefore, discount, url: link,
+                photo_url: imageUrl, hotness, description, scrape_date: new Date().toISOString()
+            });
         });
-      } catch (err) {
-        console.error(`❌ Error processing deal element: ${err.message}`);
-      }
+
+        return extractedDeals;
     });
 
-    // Save the deals to a file
-    await saveDeals(deals);
+    await browser.close();
+
+    // Sauvegarde dans un fichier
+    if (deals.length > 0) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `dealabs_${searchText}_${timestamp}.json`;
+        const outputDir = path.join(__dirname, 'data');
+
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        const filePath = path.join(outputDir, filename);
+        fs.writeFileSync(filePath, JSON.stringify(deals, null, 2));
+
+        console.log(`💾 Données sauvegardées dans ${filePath}`);
+        console.log(`📂 ${deals.length} deals enregistrés`);
+    } else {
+        console.log('⚠️ Aucun deal trouvé');
+    }
 
     return deals;
-  } catch (error) {
-    console.error('❌ Error scraping Dealabs:', error.message);
-    if (error.response) {
-      console.error(`🔴 Status: ${error.response.status}`);
-    }
-    return [];
-  }
 }
 
-/**
- * Save deals to a JSON file
- * @param {Array} deals - Array of deal objects to save
- * @returns {Promise<void>}
- */
-async function saveDeals(deals) {
-  try {
-    if (deals && deals.length > 0) {
-      console.log(`✅ Found ${deals.length} items`);
-      console.log('📌 Sample items:');
+// Exemple d'utilisation
+scrapeDealabs('lego')
+    .then(deals => console.log(`🎉 Scraping terminé ! ${deals.length} deals trouvés`))
+    .catch(err => console.error('❌ Erreur globale:', err));
 
-      // Show up to 3 sample items
-      deals.slice(0, 3).forEach((deal, i) => {
-        console.log(`${i + 1}. ${deal.title} - ${deal.price}`);
-      });
-
-      // Save all deals to a single file
-      const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-      const filename = `dealabs_deals_${timestamp}.json`;
-      const dataDir = path.join(__dirname, '..', 'data'); // Ensure consistent directory structure
-
-      // Create data directory if it doesn't exist
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-
-      const filePath = path.join(dataDir, filename);
-      fs.writeFileSync(filePath, JSON.stringify(deals, null, 2));
-      console.log(`💾 All data saved to ${filePath}`);
-    } else {
-      console.log('⚠️ No items found');
-    }
-  } catch (error) {
-    console.error('❌ Error saving deals:', error.message);
-  }
-}
-
-/**
- * Main function to scrape and save deals from a URL
- * @param {string} url - The URL to scrape
- */
-async function main(url = 'https://www.dealabs.com/') {
-  try {
-    console.log(`🕵️‍♂️ Browsing ${url} website`);
-    await scrape(url);
-    console.log('✅ Done');
-  } catch (e) {
-    console.error(e);
-    process.exit(1);
-  }
-}
-
-// Export both the scrape function for modular use and the main function for direct execution
 module.exports = {
-  scrape,
-  main
+    scrapeDealabs
 };
-
-// If this file is being run directly, execute the main function with command line arguments
-if (require.main === module) {
-  const [, , url] = process.argv;
-  main(url);
-}
