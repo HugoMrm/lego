@@ -1,10 +1,11 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const { MongoClient } = require('mongodb');
-const path = require('path');
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
-const MONGODB_URI = "mongodb+srv://hugomermet53:%24S%40snXdDp6Don9fJ@cluster0.lbbkr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-const MONGODB_DB_NAME = "dealabs";
+const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME_DEALABS;
 
 // Connexion à MongoDB
 async function connectToMongoDB() {

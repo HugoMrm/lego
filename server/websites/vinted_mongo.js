@@ -1,9 +1,11 @@
 const axios = require("axios");
 const puppeteer = require("puppeteer");
 const { MongoClient } = require("mongodb");
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
-const MONGODB_URI = "mongodb+srv://hugomermet53:%24S%40snXdDp6Don9fJ@cluster0.lbbkr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-const MONGODB_DB_NAME = "vinted";
+const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME_VINTED;
 const MAX_CONCURRENT_SCRAPES = 5;
 
 async function connectToMongoDB() {
