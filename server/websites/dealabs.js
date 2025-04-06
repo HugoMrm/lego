@@ -61,7 +61,7 @@ async function scrapeDealabs(searchText = 'lego') {
             const hotness = hotnessElement ? parseInt(hotnessElement.innerText.replace(/[^0-9+-]/g, '')) : 0;
 
             const descriptionElement = deal.querySelector('.size--all-s');
-            const description = descriptionElement ? descriptionElement.innerText.trim() : "";
+            const description = deal.querySelector('.publishedAt')?.innerText.trim() ?? "";
 
             extractedDeals.push({
                 id, id_lego, title, price, price_before_discount: priceBefore, discount, url: link,

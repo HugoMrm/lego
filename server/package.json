@@ -12,7 +12,10 @@
     "mongoose": "^8.13.2",
     "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0",
+    "p-limit": "^6.2.0",
     "parse-domain": "^8.2.2",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "require-all": "^3.0.0",
     "uuid": "^11.0.5"
   },

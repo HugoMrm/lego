@@ -42,6 +42,7 @@ async function scrapeVinted(searchText) {
       title: item.title,
       price: item.price_numeric,
       url: `https://www.vinted.fr/items/${item.id}`,
+      date: item.photo?.high_resolution?.timestamp ? new Date(item.photo.high_resolution.timestamp * 1000).toISOString(): null
     }));
 
     console.log(`✅ ${filteredItems.length} articles récupérés pour "${searchText}" !`);
