@@ -65,8 +65,9 @@ async function scrapeDealabs(searchText = 'lego') {
                 const discount = deal.querySelector('.textBadge--green')?.textContent.replace('%', '').trim() ?? null;
                 const link = deal.querySelector('a.cept-tt')?.href ?? null;
                 
-                // Compteur de commentaires
-                const commentsElement = deal.querySelector('.flex--shrink-0 button span');
+                // Compteur de commentaires - Correction basée sur votre capture
+                const commentsElement = deal.querySelector('a[title="Commentaires"] span') || 
+                deal.querySelector('.icon--comments').nextSibling;
                 const comments_count = commentsElement ? parseInt(commentsElement.textContent.trim()) : 0;
                 
                 // Image
