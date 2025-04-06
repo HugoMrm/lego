@@ -1,12 +1,10 @@
-// Invoking strict mode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode#invoking_strict_mode
-'use strict';
-
-
-/**
- * 
- * @param {Array} deals - list of deals
- * @returns {Array} list of lego set ids
- */
-const getIdsFromDeals = deals => {
-    return deals.map(deal => deal.id)
-}
+// Fonction pour formater la date
+function formatDate(dateString) {
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString('fr-FR', options);
+  }
+  
+  // Fonction pour calculer le pourcentage de réduction
+  function calculateDiscount(price, originalPrice) {
+    return Math.round((1 - price / originalPrice) * 100);
+  }

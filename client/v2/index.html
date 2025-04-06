@@ -1,89 +1,38 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>🧱 Lego | Predictability of a lego set deal</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <h1>Lego</h1>
-    <section id="options">
-      <div id="show">
-        <label for="show-select">Show:</label>
-        <select name="show" id="show-select">
-          <option value="6">6</option>
-          <option value="12">12</option>
-          <option value="24">24</option>
-        </select>
-      </div>
-      <div id="page">
-        <label for="page-select">Go to page:</label>
-        <select name="page" id="page-select"> </select>
-      </div>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Deals LEGO</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🧱 Meilleurs Deals LEGO</h1>
+  </header>
 
-      <div id="filters">
-        <button id="bestDiscountButton">By best discount</button>
-        <button id="mostCommentedButton">By most commented</button>
-        <button id="hotDealsButton">By hot deals</button>
-      </div>
+  <section class="filters">
+    <label for="lego-set-id-select">Filtrer par Set ID :</label>
+    <select id="lego-set-id-select">
+      <option value="">Tous les sets</option>
+    </select>
 
-      <div>
-        <label for="discountSlider">Filter by discount (minimum %): </label>
-        <input type="range" id="discountSlider" min="0" max="100" step="1" value="50">
-        <span id="discountValue">50</span>%
-      </div>
-      <div>
-        <label for="commentSlider">Filter by comments (minimum): </label>
-        <input type="range" id="commentSlider" min="0" max="15" step="1" value="5">
-        <span id="commentValue">5</span>
-      </div>
-      
-      <div id="sort">
-        <label for="sort-select">Sort:</label>
-        <select name="sort" id="sort-select">
-          <option value="price-asc">Cheaper</option>
-          <option value="price-desc">Expensive</option>
-          <option value="date-asc">Recently published</option>
-          <option value="date-desc">Anciently published</option>
-        </select>
-      </div>
-    </section>
-    <section id="lego">
-      <h2>Lego sets</h2>
-      <div>
-        <label>Lego set id:</label>
-        <select id="lego-set-id-select"></select> 
-      </div>
-    </section>
-    <section id="indicators">
-      <h2>Indicators</h2>
-      <div>
-        <span>Number of deals</span>
-        <span id="nbDeals">0</span>
-      </div>
-      <div>
-        <span>Number of sales</span>
-        <span id="nbSales">0</span>
-      </div>
-      <div>
-        <span>p5 sales price value</span>
-        <span>0</span>
-      </div>
-      <div>
-        <span>p25 sales price value</span>
-        <span>0</span>
-      </div>
-      <div>
-        <span>p50 sales price value</span>
-        <span>0</span>
-      </div>
-      <div>
-        <span>Lifetime value</span>
-        <span>10 days</span>
-      </div>
-    </section>
-    <section id="deals"></section>
-    <script type="text/javascript" charset="UTF-8" src="utils.js"></script>
-    <script type="text/javascript" charset="UTF-8" src="portfolio.js"></script>
-  </body>
+    <label for="discountSlider">Réduction min : <span id="discountValue">0</span>%</label>
+    <input type="range" id="discountSlider" min="0" max="100" value="0" />
+
+    <label for="commentSlider">Min commentaires : <span id="commentValue">0</span></label>
+    <input type="range" id="commentSlider" min="0" max="1000" value="0" />
+  </section>
+
+  <section id="deals" class="deals-container">
+    <!-- Deals injectés ici -->
+  </section>
+
+  <section id="deal-detail" style="display: none;">
+    <h2>Détail du Deal</h2>
+    <div id="deal-detail-content"></div>
+  </section>
+
+  <script src="portfolio_index.js"></script>
+</body>
 </html>
