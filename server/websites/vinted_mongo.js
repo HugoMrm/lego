@@ -30,7 +30,7 @@ async function getVintedAccessToken() {
             timeout: 60000 
         });
 
-        const cookies = await page.cookies();
+        const cookies = await page.cookies(page.url());
         const accessTokenCookie = cookies.find(cookie => cookie.name === "access_token_web");
         
         if (!accessTokenCookie) {
