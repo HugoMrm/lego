@@ -1,11 +1,24 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-const path = require('path');
+const { MongoClient } = require('mongodb');
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
+
+const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME_DEALABS;
+
+// Connexion à MongoDB
+async function connectToMongoDB() {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    console.log("✅ Connecté à MongoDB Atlas !");
+    return client.db(MONGODB_DB_NAME);
+}
 
 async function scrapeDealabs(searchText = 'lego') {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
-    
+
     const url = `https://www.dealabs.com/search?q=${encodeURIComponent(searchText)}&?hide_expired=true`;
     console.log(`🔍 Chargement de ${url}...`);
 
@@ -20,10 +33,9 @@ async function scrapeDealabs(searchText = 'lego') {
             const id = deal.getAttribute('id') ? deal.getAttribute('id').replace('thread_', '') : null;
             const title = deal.querySelector('.cept-tt') ? deal.querySelector('.cept-tt').innerText.trim() : "No title";
 
-            // Extraction des 5 chiffres du modèle LEGO
+            // Extraction du modèle LEGO (5 chiffres)
             const idLegoMatch = title.match(/\b\d{5}\b/);
             const id_lego = idLegoMatch ? idLegoMatch[0] : null;
-
 
             const priceElement = deal.querySelector('.thread-price');
             const price = priceElement ? parseFloat(priceElement.innerText.replace(/[^0-9.,]/g, '').replace(',', '.')) : 0;
@@ -40,9 +52,9 @@ async function scrapeDealabs(searchText = 'lego') {
             const imageElement = deal.querySelector('img');
             let imageUrl = imageElement ? imageElement.src || imageElement.dataset.src : "No image";
 
-            // Amélioration de la qualité de l'image en remplaçant "202x202" par "1024x1024"
+            // Amélioration de la qualité de l'image (202x202 → 1024x1024)
             if (imageUrl.includes("202x202")) {
-              imageUrl = imageUrl.replace("202x202", "1024x1024");
+                imageUrl = imageUrl.replace("202x202", "1024x1024");
             }
 
             const hotnessElement = deal.querySelector('.cept-vote-temp');
@@ -62,21 +74,17 @@ async function scrapeDealabs(searchText = 'lego') {
 
     await browser.close();
 
-    // Sauvegarde dans un fichier
+    // Connexion à MongoDB
+    const db = await connectToMongoDB();
+    const collection = db.collection('deals');
+
     if (deals.length > 0) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `dealabs_${searchText}_${timestamp}.json`;
-        const outputDir = path.join(__dirname, 'data');
-
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
+        try {
+            const result = await collection.insertMany(deals, { ordered: false });
+            console.log(`💾 ${result.insertedCount} deals enregistrés dans MongoDB !`);
+        } catch (error) {
+            console.error("❌ Erreur lors de l'insertion MongoDB:", error.message);
         }
-
-        const filePath = path.join(outputDir, filename);
-        fs.writeFileSync(filePath, JSON.stringify(deals, null, 2));
-
-        console.log(`💾 Données sauvegardées dans ${filePath}`);
-        console.log(`📂 ${deals.length} deals enregistrés`);
     } else {
         console.log('⚠️ Aucun deal trouvé');
     }
@@ -84,7 +92,7 @@ async function scrapeDealabs(searchText = 'lego') {
     return deals;
 }
 
-// Exemple d'utilisation
+// Lancer le scraping
 scrapeDealabs('lego')
     .then(deals => console.log(`🎉 Scraping terminé ! ${deals.length} deals trouvés`))
     .catch(err => console.error('❌ Erreur globale:', err));
