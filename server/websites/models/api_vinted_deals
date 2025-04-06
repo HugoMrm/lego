@@ -1,0 +1,28 @@
+const { vintedConnection } = require('../databases');
+const mongoose = require('mongoose');
+
+const dealSchema = new mongoose.Schema({
+  id: String,
+  title: String,
+  price: Number,
+  price_with_fees: Number,
+  url: String,
+  photo_url: String,
+  user_id: String,
+  user_login: String,
+  user_pp: String,
+  user_url: String,
+  upload_date: String,
+  scrape_date: String,
+  favorite_count: Number,
+  view_count: Number,
+  isPromoted: Boolean
+}, { 
+  collection: 'deals', // La collection dans la base vinted
+  versionKey: false // Optionnel : désactive le champ __v
+});
+
+// On utilise la connexion spécifique à dealabs
+const VintedDeal = vintedConnection.model('VintedDeal', dealSchema);
+
+module.exports = VintedDeal;

@@ -93,7 +93,7 @@ async function scrapeVinted(searchText) {
             if (!item || !item.url || !item.photo || !item.user) {
                 console.warn("⚠️ Item invalide détecté, il sera ignoré :", item);
                 continue;
-            }
+            }            
 
             // Ajouter la tâche dans le tableau
             tasks.push(

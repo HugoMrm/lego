@@ -1,0 +1,24 @@
+const { dealabsConnection } = require('../databases');
+const mongoose = require('mongoose');
+
+const dealSchema = new mongoose.Schema({
+  id: String,
+  id_lego: String,
+  title: String,
+  price: Number,
+  price_before_discount: Number,
+  discount: Number,
+  url: String,
+  photo_url: String,
+  hotness: Number,
+  description: String,
+  scrape_date: String
+}, { 
+  collection: 'deals', // La collection dans la base dealabs
+  versionKey: false // Optionnel : désactive le champ __v
+});
+
+// On utilise la connexion spécifique à dealabs
+const DealabsDeal = dealabsConnection.model('DealabsDeal', dealSchema);
+
+module.exports = DealabsDeal;
