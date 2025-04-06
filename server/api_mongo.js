@@ -10,7 +10,7 @@ const helmet = require('helmet'); // Import manquant ajouté ici
 const { 
   calculateDealScore,
   calculateProfitScore // Ajoutez cet import
-} = require('./utils/dealScoring');
+} = require('./websites/utils/dealscoring');
 
 // Initialisation Express
 const app = express();
@@ -26,8 +26,8 @@ mongoose.connect(process.env.MONGODB_URI)
 .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // Nouveau système de synchronisation
-const { startScheduler } = require('./services/schedulerService');
-const syncRoutes = require('./routes/syncRoutes');
+const { startScheduler } = require('./websites/services/schedulerService');
+const syncRoutes = require('./websites/routes/syncRoutes');
 app.use('/api', syncRoutes);
 
 // **************************************
