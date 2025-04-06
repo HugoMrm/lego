@@ -81,16 +81,16 @@ async function scrapeDealabs(searchText = 'lego') {
                 
                 // Date de publication
                 const dateText = deal.querySelector('.size--all-s, .text--color-greyShade')?.textContent.trim() ?? "";
-                let date_upload = null;
+                let upload_date = null;
                 
                 if (dateText.includes("Aujourd'hui")) {
-                    date_upload = now.toISOString();
+                    upload_date = now.toISOString();
                 } else if (dateText.includes("Hier")) {
                     const yesterday = new Date(now);
                     yesterday.setDate(yesterday.getDate() - 1);
-                    date_upload = yesterday.toISOString();
+                    upload = yesterday.toISOString();
                 } else {
-                    date_upload = parseRelativeTime(dateText) || dateText;
+                    upload_date = parseRelativeTime(dateText) || dateText;
                 }
 
                 extractedDeals.push({
@@ -104,7 +104,7 @@ async function scrapeDealabs(searchText = 'lego') {
                     comments_count,
                     photo_url: imageUrl, 
                     hotness, 
-                    date_upload,
+                    upload_date,
                     scrape_date: now.toISOString()
                 });
             } catch (error) {

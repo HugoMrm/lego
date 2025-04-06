@@ -49,7 +49,7 @@ async function getVintedAccessToken() {
 async function scrapeVinted(searchText) {
     try {
         const accessToken = await getVintedAccessToken();
-        const VINTED_API_URL = `https://www.vinted.fr/api/v2/catalog/items?page=1&per_page=15&search_text=${encodeURIComponent(searchText)}`;
+        const VINTED_API_URL = `https://www.vinted.fr/api/v2/catalog/items?page=1&per_page=96&search_text=${encodeURIComponent(searchText)}`;
 
         const HEADERS = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
