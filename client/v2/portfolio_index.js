@@ -1,5 +1,5 @@
 async function fetchDeals() {
-    const response = await fetch('http://localhost:8092/api/dealabs/deals');
+    const response = await fetch('https://lego-2pbsjr7st-hugos-projects-d23d372e.vercel.app/api/dealabs/deals');
     return await response.json();
   }
   

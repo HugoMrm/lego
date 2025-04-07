@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notation des Deals LEGO</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>🧱 Comment sont notés les deals LEGO</h1>
+    <a href="index.html" class="back-link">← Retour aux deals</a>
+  </header>
+
+  <main class="notation-container">
+    <section>
+      <h2>Notre système de scoring</h2>
+      <p>Chaque deal est évalué selon 6 critères principaux :</p>
+      
+      <div class="criteria">
+        <div class="criterion">
+          <h3>Score de Profit (25%)</h3>
+          <p>Évalue le profit potentiel par rapport au marché Vinted.</p>
+          <ul>
+            <li>Comparaison avec le 5ème percentile des prix Vinted</li>
+            <li>Prend en compte le profit absolu et le pourcentage</li>
+          </ul>
+        </div>
+
+        <div class="criterion">
+          <h3>Score de Prix (25%)</h3>
+          <p>Évalue où se situe le prix par rapport au marché.</p>
+          <ul>
+            <li>Percentile du prix parmi les ventes similaires</li>
+            <li>Plus le percentile est bas, meilleur est le score</li>
+          </ul>
+        </div>
+
+        <div class="criterion">
+          <h3>Score de Marché (15%)</h3>
+          <p>Évalue l'état du marché pour ce set LEGO.</p>
+          <ul>
+            <li>Nombre d'annonces disponibles</li>
+            <li>Stabilité des prix</li>
+            <li>Tendance des prix</li>
+          </ul>
+        </div>
+
+        <div class="criterion">
+          <h3>Score de Popularité (15%)</h3>
+          <p>Évalue l'engouement pour ce deal.</p>
+          <ul>
+            <li>Basé sur le "hotness" du deal</li>
+            <li>Prend en compte les votes et commentaires</li>
+          </ul>
+        </div>
+
+        <div class="criterion">
+          <h3>Score de Liquidité (10%)</h3>
+          <p>Évalue la facilité à revendre le set.</p>
+          <ul>
+            <li>Basé sur la vitesse de vente moyenne</li>
+            <li>Plus c'est rapide, meilleur est le score</li>
+          </ul>
+        </div>
+
+        <div class="criterion">
+          <h3>Score de Risque (10%)</h3>
+          <p>Évalue les risques potentiels.</p>
+          <ul>
+            <li>Écart de prix avec la moyenne</li>
+            <li>État du produit si spécifié</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="rating-scale">
+      <h2>Échelle de notation</h2>
+      <ul>
+        <li><strong>9-10/10</strong> : Excellent deal - Fort profit, prix bas, marché favorable</li>
+        <li><strong>7-8/10</strong> : Très bon deal - Bon profit, bon prix</li>
+        <li><strong>5-6/10</strong> : Deal correct - Profit modéré, prix moyen</li>
+        <li><strong>3-4/10</strong> : Deal moyen - Profit limité ou marché défavorable</li>
+        <li><strong>0-2/10</strong> : Mauvais deal - Peu ou pas de profit, risques élevés</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,114 +1,58 @@
-const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, ".env") });
-const express = require('express');
-const mongoose = require('mongoose');
+// api/index.js - Version avec le nouveau système de scoring
 const cors = require('cors');
-const { ObjectId } = require('mongodb');
-const helmet = require('helmet'); // Import manquant ajouté ici
-// Dans api_mongo.js
-// Modifiez l'import en haut du fichier
+const express = require('express');
+const helmet = require('helmet');
+const { MongoClient } = require('mongodb');
+const path = require('path');
+require('dotenv').config();
+
+// Import des fonctions de scoring
 const { 
   calculateDealScore,
-  calculateProfitScore // Ajoutez cet import
-} = require('./websites/utils/dealscoring');
+  calculateProfitScore
+} = require('./websites/utils/dealScoring');
 
-// Initialisation Express
+const PORT = process.env.PORT || 8092;
+const MONGODB_URI = process.env.MONGODB_URI;
+
 const app = express();
 
 // Middlewares
-app.use(cors());
 app.use(express.json());
-app.use(helmet()); // Maintenant helmet est défini
+app.use(cors());
+app.use(helmet());
+app.options('*', cors());
 
-// Connexion MongoDB principale
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+// MongoDB client setup
+let client;
 
-// Nouveau système de synchronisation
-const { startScheduler } = require('./websites/services/schedulerService');
-const syncRoutes = require('./websites/routes/syncRoutes');
-app.use('/api', syncRoutes);
-
-// **************************************
-// ROUTES CORRIGÉES
-// **************************************
-
-// Modifiez la route Dealabs
-app.get('/api/dealabs/deals', async (req, res) => {
+async function connectToMongo(dbName) {
+  console.log(`🔌 Tentative de connexion à MongoDB (base: ${dbName})...`);
+  
   try {
-    const db = mongoose.connection.client.db('dealabs');
-    const vintedDb = mongoose.connection.client.db('vinted');
-    
-    const { legoSetId } = req.query;
-    const query = {};
-    
-    if (legoSetId) {
-      query.title = { $regex: legoSetId, $options: 'i' };
-    }
-    
-    const deals = await db.collection('deals').find(query).toArray();
-    const scoredDeals = [];
-    
-    for (const deal of deals) {
-      if (!deal.id_lego && !legoSetId) continue;
-      
-      // Recherche dans Vinted basée sur le titre similaire
-      const vintedQuery = {};
-      if (deal.id_lego) {
-        vintedQuery.title = { $regex: deal.id_lego, $options: 'i' };
-      } else if (legoSetId) {
-        vintedQuery.title = { $regex: legoSetId, $options: 'i' };
-      }
-      
-      const vintedData = await vintedDb.collection('deals')
-        .find(vintedQuery)
-        .toArray();
-      
-      // Préparation des données pour le scoring
-      const vintedPrices = vintedData.map(item => item.price).filter(price => !isNaN(price));
-      const fifthPercentilePrice = vintedPrices.length > 0 ? 
-        calculateNthPercentile(5, vintedPrices) : 
-        (deal.original_price || deal.price || 0);
-      
-      const score = calculateDealScore({
-        ...deal,
-        price: deal.price || 0,
-        originalPrice: fifthPercentilePrice, // Utilisation du 5ème percentile comme référence
-        condition: deal.condition || 'good'
-      }, vintedData.map(item => ({
-        price: item.price,
-        datePublished: item.upload_date,
-        dateSold: item.scrape_date
-      })));
-      
-      // Calcul spécifique du profit score avec les données Vinted
-      score.profitScore = calculateProfitScore(
-        { price: deal.price || 0 }, 
-        vintedData
-      );
-      
-      // Recalcul du totalScore avec le nouveau profitScore
-      score.totalScore = Object.values({
-        ...score,
-        profitScore: score.profitScore // On s'assure d'utiliser la nouvelle valeur
-      }).reduce((a,b) => a + b, 0);
-      
-      scoredDeals.push({
-        ...deal,
-        score: {
-          ...score,
-          rating: getRatingFromScore(score.totalScore),
-          fifthPercentilePrice // Ajout pour information
-        }
+    if (!client) {
+      console.log('🆕 Création d\'une nouvelle connexion MongoDB');
+      client = new MongoClient(MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        maxPoolSize: 10
       });
+      await client.connect();
     }
+
+    const db = client.db(dbName);
+    console.log(`✅ Connecté à MongoDB - Base: ${dbName}`);
     
-    res.json(scoredDeals.sort((a,b) => b.score.totalScore - a.score.totalScore));
+    // Vérification que la collection existe
+    const collections = await db.listCollections().toArray();
+    console.log(`📚 Collections disponibles dans ${dbName}:`, collections.map(c => c.name));
+    
+    return db;
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(`❌ Erreur de connexion à MongoDB (base: ${dbName}):`, error);
+    throw error;
   }
-});
+}
 
 // Fonction helper pour calculer le Nième percentile
 function calculateNthPercentile(n, array) {
@@ -128,62 +72,154 @@ function getRatingFromScore(totalScore) {
   return 'Faible';
 }
 
-// Route Vinted corrigée
-app.get('/api/vinted/sales', async (req, res) => {
+// Route racine - Doit être placée avant les autres routes
+app.get('/', (req, res) => {
+  res.json({
+    message: "API Lego en marche!",
+    endpoints: {
+      dealabs: "/api/dealabs/deals",
+      vinted: "/api/vinted/sales",
+      docs: "/api-docs" // Si vous avez une documentation
+    }
+  });
+});
+
+// Route Dealabs avec le nouveau système de scoring
+app.get('/api/dealabs/deals', async (req, res) => {
+  console.log('🛒 Requête GET /api/dealabs/deals', { query: req.query });
+  
   try {
-    const db = mongoose.connection.client.db('vinted');
+    console.time('⏱️ Temps total Dealabs');
     
-    const { limit = 96, legoSetId, minPrice, maxPrice, sortBy = 'upload_date', sortOrder = -1 } = req.query;
+    // Connexion aux bases
+    console.time('⏱️ Connexion DB Dealabs');
+    const dealabsDb = await connectToMongo('dealabs');
+    console.timeEnd('⏱️ Connexion DB Dealabs');
+    
+    console.time('⏱️ Connexion DB Vinted');
+    const vintedDb = await connectToMongo('vinted');
+    console.timeEnd('⏱️ Connexion DB Vinted');
+
+    // Construction de la requête
+    const { legoSetId } = req.query;
     const query = {};
     
     if (legoSetId) {
       query.title = { $regex: legoSetId, $options: 'i' };
+      console.log(`🔍 Filtre Dealabs: LEGO Set ID = ${legoSetId}`);
+    } else {
+      console.log('🔍 Pas de filtre LEGO Set ID');
     }
+
+    // Récupération des deals
+    console.time('⏱️ Récupération deals Dealabs');
+    const deals = await dealabsDb.collection('deals').find(query).toArray();
+    console.timeEnd('⏱️ Récupération deals Dealabs');
+    console.log(`📊 ${deals.length} deals trouvés`);
+
+    // Traitement des deals
+    const scoredDeals = [];
+    console.log(`🔄 Début du traitement de ${deals.length} deals...`);
     
-    if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = parseFloat(minPrice);
-      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+    for (const [index, deal] of deals.entries()) {
+      if (!deal.id_lego && !legoSetId) {
+        console.log(`⏭️ Deal ${index} ignoré (pas d'ID LEGO)`);
+        continue;
+      }
+      
+      const searchTerm = deal.id_lego || legoSetId;
+      console.log(`🔎 Recherche Vinted pour: ${searchTerm} (Deal ${index + 1}/${deals.length})`);
+      
+      const vintedQuery = { title: { $regex: searchTerm, $options: 'i' } };
+      
+      console.time(`⏱️ Recherche Vinted ${index}`);
+      const vintedData = await vintedDb.collection('deals')
+        .find(vintedQuery)
+        .toArray();
+      console.timeEnd(`⏱️ Recherche Vinted ${index}`);
+      console.log(`📊 ${vintedData.length} résultats Vinted trouvés`);
+
+      // Préparation des données pour le scoring
+      const vintedPrices = vintedData.map(item => item.price).filter(price => !isNaN(price));
+      const fifthPercentilePrice = vintedPrices.length > 0 ? 
+        calculateNthPercentile(5, vintedPrices) : 
+        (deal.original_price || deal.price || 0);
+      
+      // Calcul du score complet
+      const score = calculateDealScore(
+        {
+          ...deal,
+          price: deal.price || 0,
+          originalPrice: fifthPercentilePrice,
+          condition: deal.condition || 'good'
+        }, 
+        vintedData.map(item => ({
+          price: item.price,
+          datePublished: item.upload_date,
+          dateSold: item.scrape_date
+        }))
+      );
+
+      // Calcul spécifique du profit score avec les données Vinted
+      score.profitScore = calculateProfitScore(
+        { price: deal.price || 0 }, 
+        vintedData
+      );
+      
+      // Recalcul du totalScore avec le nouveau profitScore
+      score.totalScore = Object.values({
+        ...score,
+        profitScore: score.profitScore
+      }).reduce((a,b) => a + b, 0);
+      
+      scoredDeals.push({
+        ...deal,
+        score: {
+          ...score,
+          rating: getRatingFromScore(score.totalScore),
+          fifthPercentilePrice
+        }
+      });
+      
+      console.log(`⭐ Deal ${index} scoré: ${score.totalScore.toFixed(1)} (${getRatingFromScore(score.totalScore)})`);
     }
+
+    // Tri et réponse
+    const sortedDeals = scoredDeals.sort((a, b) => b.score.totalScore - a.score.totalScore);
+    console.log(`🏁 ${sortedDeals.length} deals traités avec succès`);
+    console.timeEnd('⏱️ Temps total Dealabs');
     
-    const sortOptions = {};
-    sortOptions[sortBy] = parseInt(sortOrder);
-
-    const sales = await db.collection('deals')
-      .find(query)
-      .sort(sortOptions)
-      .limit(parseInt(limit))
-      .toArray();
-
-    res.json({ 
-      limit: parseInt(limit),
-      total: sales.length,
-      results: sales.map(sale => ({
-        id: sale.id,
-        title: sale.title,
-        price: sale.price,
-        price_with_fees: sale.price_with_fees,
-        url: sale.url,
-        photo_url: sale.photo_url,
-        upload_date: sale.upload_date,
-        favorite_count: sale.favorite_count,
-        isPromoted: sale.isPromoted
-      }))
-    });
+    res.json(sortedDeals);
+    
   } catch (error) {
-    console.error('Vinted error:', error);
-    res.status(500).json({ error: 'Database error' });
+    console.error('💥 ERREUR:', error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
-// Gestion des erreurs
-app.use((req, res) => {
-  res.status(404).json({ error: "Endpoint not found" });
-});
+// ... (le reste de votre code API reste inchangé)
 
-// Démarrer le serveur ET le scheduler
-const PORT = process.env.PORT || 8092;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  startScheduler();
-});
+// Export pour Vercel
+module.exports = app;
+
+// Pour le développement local
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log('🔍 Pour déboguer:');
+    console.log(`- Dealabs: http://localhost:${PORT}/api/dealabs/deals?legoSetId=10278`);
+    console.log(`- Vinted: http://localhost:${PORT}/api/vinted/sales?legoSetId=10278`);
+  });
+
+  // Nettoyage à la fermeture
+  process.on('SIGINT', async () => {
+    if (client) {
+      await client.close();
+      console.log('📦 Connexion MongoDB fermée');
+    }
+    process.exit(0);
+  });
+}
